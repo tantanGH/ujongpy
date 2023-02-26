@@ -1,38 +1,22 @@
 import x68k
-import machine
 import random
 import time
 from uctypes import addressof
-from struct import pack, unpack
+from struct import pack
 
 class Hai:
 
-  # Hai instance ID
-  hai_id = None
-
-  # Hai type
-  hai_type = None
-
-  # Hai status
-  hai_status = None
-
-  # image addr
-  images = None
+  gvram = x68k.GVRam()
 
   def __init__(self, id, type, image0, image1, image2):
     self.hai_id = id
     self.hai_type = type
+    self.hai_status = 0
     self.images = [ image0, image1, image2 ]     # 起牌, 倒牌, 背面
 
   def paint(self, pos_x, pos_y):
-    with x68k.Super():
-      image_addr = self.images[ self.hai_status ]
-      for y in range(36):
-        vram_addr = 0xC00000 + ( 16 + pos_y * 32 + y ) * 512 * 2 + 16 + pos_x * 24 * 2
-        for x in range(12):
-          machine.mem32[ vram_addr ] = machine.mem32[ image_addr ]
-          vram_addr += 4
-          image_addr += 4
+    image_bytes = self.images[ self.hai_status ]
+    Hai.gvram.put(12 + pos_x * 24 , 16 + pos_y * 32, 12 + pos_x * 24 + 23, 16 + pos_y * 32 + 35, image_bytes)
 
 def init_hais():
 
@@ -51,7 +35,7 @@ def init_hais():
   hais = []
   for i in range(34*4):
     t = i // 4
-    h = Hai(i, t, addressof(hai0) + 24*36*2*t, None, addressof(hai0) + 24*36*2*(34+3))
+    h = Hai(i, t, hai0[24*36*2*t:24*36*2*(t+1)], None, hai0[24*36*2*37:24*36*2*38])
     hais.append(h)
 
   return hais
@@ -92,23 +76,29 @@ def main():
 
   # 相手の牌
   for i,h in enumerate(hais[13:26]):
+    for v in range(3):
+      x68k.vsync()
     h.hai_status = 2    # 背面
     h.paint(4+i,2)
-#    time.sleep(0.2)
 
   # 自分の牌
   for i,h in enumerate(hais[0:13]):
+    for v in range(3):
+      x68k.vsync()
     h.hai_status = 0    # 起牌
     h.paint(4+i,13)
-#    time.sleep(0.2)
 
   # 一度伏せて
   for i,h in enumerate(hais[0:13]):
+    for v in range(3):
+      x68k.vsync()
     h.hai_status = 2    # 背面
     h.paint(4+i,13)
 
   # 理牌
   for i,h in enumerate(sorted(hais[0:13],key=lambda h: h.hai_type)):
+    for v in range(3):
+      x68k.vsync()
     h.hai_status = 0
     h.paint(4+i,13)
 
