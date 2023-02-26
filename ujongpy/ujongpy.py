@@ -6,53 +6,79 @@ from struct import pack
 
 class Hai:
 
+  # クラス変数 GVRam オブジェクト参照
   gvram = x68k.GVRam()
 
+  # 牌パターン定義バイト列のリスト
   patterns = None
 
+  # コンストラクタ
   def __init__(self, id, type):
     self.hai_id = id
     self.hai_type = type
     self.hai_status = 0
 
+  # パターンデータ取得
+  def get_pattern(self):
+    if self.hai_status == 2:            
+      return Hai.patterns [ 7 + 9 * 3 + 3 ]   # 背面
+    elif self.hai_status == 1:          
+      return Hai.patterns [ 7 + 9 * 3 + 3 + 1 + self.hai_type ]   # 倒牌
+    else:
+      return Hai.patterns [ self.hai_type ]   # 起牌
+
+  # パターン描画
   def paint(self, pos_x, pos_y):
-    pattern = Hai.patterns[ self.hai_type ] if self.hai_status == 0 else Hai.patterns [ 7 + 9 * 3 + 3 ]
-    Hai.gvram.put(12 + pos_x * 24 , 16 + pos_y * 32, 12 + pos_x * 24 + 23, 16 + pos_y * 32 + 35, pattern)
+   Hai.gvram.put(12 + pos_x * 24 , 16 + pos_y * 32, 12 + pos_x * 24 + 23, 16 + pos_y * 32 + 35, self.get_pattern())
 
-def init_hais():
+  # 配牌
+  @classmethod
+  def get_hais(cls, hai0_file_name, hai1_file_name):
 
-  # 牌画像データ読み込み
-  hai0 = bytearray()
-  with open("hai0.dat","rb") as f:
-    while True:
-      h = f.read()
-      if len(h) == 0:
-        break
-      hai0.extend(h)
+    # 牌画像データ読み込み (起牌)
+    hai0 = bytearray()
+    with open(hai0_file_name,"rb") as f:
+      while True:
+        h = f.read()
+        if len(h) == 0:
+          break
+        hai0.extend(h)
 
-  # パターン登録
-  patterns = []
-  for i in range( 7 + 9 * 3 + 3 + 1 ):    # 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3) + 背面(1)
-    patterns.append(bytes(hai0[ 24 * 36 * 2 * i : 24 * 36 * 2 * ( i + 1 ) ]))
-  Hai.patterns = patterns
+    # 牌画像データ読み込み (倒牌)
+    hai1 = bytearray()
+    with open(hai1_file_name,"rb") as f:
+      while True:
+        h = f.read()
+        if len(h) == 0:
+          break
+        hai1.extend(h)
 
-  # 牌インスタンス作成 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) 
-  hais = []
-  for i in range(34*4):
-    t = i % 34
-    h = Hai(i, t)
-    hais.append(h)
+    # パターン登録
+    patterns = []
+    for i in range( 7 + 9 * 3 + 3 + 1 ):    # 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3) + 背面(1)
+      patterns.append(bytes(hai0[ 24 * 36 * 2 * i : 24 * 36 * 2 * ( i + 1 ) ]))
+    for i in range( 7 + 9 * 3 + 3 + 1 ):    # 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3)
+      patterns.append(bytes(hai1[ 24 * 36 * 2 * i : 24 * 36 * 2 * ( i + 1 ) ]))
+    Hai.patterns = patterns
 
-  return hais
+    # 牌インスタンス作成 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) 
+    hais = []
+    for i in range(34*4):
+      t = i % 34
+      h = Hai(i, t)
+      hais.append(h)
 
-# 洗牌
-def shuffle_hais(hais):
-  for i in range(len(hais) * 8):
-    a = random.randrange(0,len(hais)-1)
-    b = random.randrange(0,len(hais)-1)
-    c = hais[a]
-    hais[a] = hais[b]
-    hais[b] = c
+    return hais
+
+  # 洗牌
+  @classmethod
+  def shuffle_hais(self, hais):
+    for i in range(len(hais) * 8):
+      a = random.randrange(0,len(hais)-1)
+      b = random.randrange(0,len(hais)-1)
+      c = hais[a]
+      hais[a] = hais[b]
+      hais[b] = c
 
 # メイン
 def main():
@@ -71,8 +97,8 @@ def main():
 
   # init 牌
   print("Initializing hai data...",end="")
-  hais = init_hais()
-  shuffle_hais(hais)
+  hais = Hai.get_hais("hai0.dat", "hai1.dat")
+  Hai.shuffle_hais(hais)
   print("\r\x1b[0K")
 
   # 雀卓
