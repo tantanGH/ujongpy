@@ -8,7 +8,7 @@ class Hai:
 
   gvram = x68k.GVRam()
 
-  patterns = []
+  patterns = None
 
   def __init__(self, id, type):
     self.hai_id = id
@@ -30,11 +30,13 @@ def init_hais():
         break
       hai0.extend(h)
 
+  # パターン登録
   patterns = []
   for i in range( 7 + 9 * 3 + 3 + 1 ):    # 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3) + 背面(1)
     patterns.append(bytes(hai0[ 24 * 36 * 2 * i : 24 * 36 * 2 * ( i + 1 ) ]))
   Hai.patterns = patterns
 
+  # 牌インスタンス作成 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) 
   hais = []
   for i in range(34*4):
     t = i % 34
@@ -43,6 +45,7 @@ def init_hais():
 
   return hais
 
+# 洗牌
 def shuffle_hais(hais):
   for i in range(len(hais) * 8):
     a = random.randrange(0,len(hais)-1)
@@ -51,6 +54,7 @@ def shuffle_hais(hais):
     hais[a] = hais[b]
     hais[b] = c
 
+# メイン
 def main():
 
   # randomize
@@ -73,9 +77,6 @@ def main():
 
   # 雀卓
   x68k.iocs(x68k.i.FILL,a1=pack('5h',0,0,511,511,0b01000_00011_00011_1))
-
-  # supervisor mode
-  #s = x68k.super()
 
   # 相手の牌
   for i,h in enumerate(hais[13:26]):
@@ -106,9 +107,6 @@ def main():
     h.paint(4+i,13)
 
   time.sleep(3)
-
-  # user mode
-  #x68k.super(s)
 
   # flush key buffer
   x68k.dos(x68k.d.KFLUSH,pack('h',0))  
