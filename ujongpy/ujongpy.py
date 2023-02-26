@@ -8,15 +8,16 @@ class Hai:
 
   gvram = x68k.GVRam()
 
-  def __init__(self, id, type, image0, image1, image2):
+  patterns = []
+
+  def __init__(self, id, type):
     self.hai_id = id
     self.hai_type = type
     self.hai_status = 0
-    self.images = [ image0, image1, image2 ]     # 起牌, 倒牌, 背面
 
   def paint(self, pos_x, pos_y):
-    image_bytes = self.images[ self.hai_status ]
-    Hai.gvram.put(12 + pos_x * 24 , 16 + pos_y * 32, 12 + pos_x * 24 + 23, 16 + pos_y * 32 + 35, image_bytes)
+    pattern = Hai.patterns[ self.hai_type ] if self.hai_status == 0 else Hai.patterns [ 7 + 9 * 3 + 3 ]
+    Hai.gvram.put(12 + pos_x * 24 , 16 + pos_y * 32, 12 + pos_x * 24 + 23, 16 + pos_y * 32 + 35, pattern)
 
 def init_hais():
 
@@ -28,14 +29,16 @@ def init_hais():
       if len(h) == 0:
         break
       hai0.extend(h)
-#  print(f"len(hai0)={len(hai0)}")
-  #with open("hai1.dat","rb") as f:
-  #  hai1 = f.read()
+
+  patterns = []
+  for i in range( 7 + 9 * 3 + 3 + 1 ):    # 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3) + 背面(1)
+    patterns.append(bytes(hai0[ 24 * 36 * 2 * i : 24 * 36 * 2 * ( i + 1 ) ]))
+  Hai.patterns = patterns
 
   hais = []
   for i in range(34*4):
-    t = i // 4
-    h = Hai(i, t, hai0[24*36*2*t:24*36*2*(t+1)], None, hai0[24*36*2*37:24*36*2*38])
+    t = i % 34
+    h = Hai(i, t)
     hais.append(h)
 
   return hais
