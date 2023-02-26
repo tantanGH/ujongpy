@@ -1,2 +1,2 @@
 # ujongpy
-Mahjong for MicroPython X680x0
+Micro Mahjong for MicroPython X680x0
