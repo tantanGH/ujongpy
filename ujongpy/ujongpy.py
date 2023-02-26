@@ -4,21 +4,22 @@ import time
 from uctypes import addressof
 from struct import pack
 
+# 牌クラス
 class Hai:
 
-  # クラス変数 GVRam オブジェクト参照
+  # クラス変数 - GVRam オブジェクト参照
   gvram = x68k.GVRam()
 
-  # 牌パターン定義バイト列のリスト
+  # クラス変数 - 牌パターン定義バイト列のリスト
   patterns = None
 
   # コンストラクタ
   def __init__(self, id, type):
     self.hai_id = id
     self.hai_type = type
-    self.hai_status = 0
+    self.hai_status = 2
 
-  # パターンデータ取得
+  # パターンデータ参照
   def get_pattern(self):
     if self.hai_status == 2:            
       return Hai.patterns [ 7 + 9 * 3 + 3 ]   # 背面
@@ -29,7 +30,7 @@ class Hai:
 
   # パターン描画
   def paint(self, pos_x, pos_y):
-   Hai.gvram.put(12 + pos_x * 24 , 16 + pos_y * 32, 12 + pos_x * 24 + 23, 16 + pos_y * 32 + 35, self.get_pattern())
+   Hai.gvram.put(pos_x * 24 , 16 + pos_y * 32, pos_x * 24 + 23, 16 + pos_y * 32 + 35, self.get_pattern())
 
   # 配牌
   @classmethod
@@ -95,7 +96,7 @@ def main():
   # function key display off
   funckey_mode = x68k.dos(x68k.d.CONCTRL,pack('hh',14,3))
 
-  # init 牌
+  # 配牌
   print("Initializing hai data...",end="")
   hais = Hai.get_hais("hai0.dat", "hai1.dat")
   Hai.shuffle_hais(hais)
@@ -104,14 +105,26 @@ def main():
   # 雀卓
   x68k.iocs(x68k.i.FILL,a1=pack('5h',0,0,511,511,0b01000_00011_00011_1))
 
-  # 相手の牌
+  # 王牌
+  for i,h in enumerate(hais[-14:]):
+    x68k.vsync()
+    h.hai_status = 2    # 背面
+    h.paint(9+i//2,7)
+
+  # ドラ表示牌
+  time.sleep(0.5)
+  x68k.vsync()
+  hais[-5].hai_status = 0
+  hais[-5].paint(9+2,7)
+
+  # 相手の牌ならべる
   for i,h in enumerate(hais[13:26]):
     for v in range(3):
       x68k.vsync()
     h.hai_status = 2    # 背面
     h.paint(4+i,2)
 
-  # 自分の牌
+  # 自分の牌ならべる
   for i,h in enumerate(hais[0:13]):
     for v in range(3):
       x68k.vsync()
