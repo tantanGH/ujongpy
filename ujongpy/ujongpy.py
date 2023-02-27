@@ -5,7 +5,7 @@ from uctypes import addressof
 from struct import pack
 
 # バージョン
-VERSION = const("2023.02.27d")
+VERSION = const("2023.02.27e")
 
 
 # 牌クラス
@@ -36,18 +36,31 @@ class Hai:
   #  row ... 0:COMPUTER手牌 1:PLAYER手牌 2:王牌  
   #@micropython.viper
   def put(self, row, pos_x, status, vsync=1):
-    if row == 0:
-      x = 4 * 24 + (12 - pos_x) * 24 if pos_x != 13 else 4 * 24 + (12 - pos_x) * 24 - 4
-      y = 1 * 36
-    elif row == 1:
+
+    if row == 0:    # COMの手牌
+      x = 4 * 24 + ( 12 - pos_x ) * 24 if pos_x != 13 else 4 * 24 + ( 12 - pos_x ) * 24 - 4
+      y = 1 * 36 - 12
+    elif row == 1:  # 自分の手牌
       x = 4 * 24 + pos_x * 24 if pos_x != 13 else 4 * 24 + pos_x * 24 + 4
       y = 12 * 36
-    elif row == 2:
+    elif row == 2:  # 王牌
       x = 9 * 24 + pos_x * 24
-      y = 6 * 36
+      y = 6 * 36 + 12
+    elif row == 3:  # COMの捨牌
+      x = 4 * 24 + 11 * 24 - ( pos_x % 12 ) * 24 + 12
+      y = 5 * 36 - ( pos_x // 12 ) * 36 
+    elif row == 4:  # 自分の捨牌
+      x = 5 * 24 + ( pos_x % 12 ) * 24 - 12
+      y = 8 * 36 + ( pos_x // 12 ) * 36 - 12
+
     for i in range(vsync):
       x68k.vsync()
-    Hai.gvram.put(x, y, x + 23, y + 35, self.get_pattern(status))
+
+    if status == 3:
+      Hai.gvram.fill(x, y, x + 23, y + 35, Game.JANTAKU_COLOR)
+    else:
+      Hai.gvram.put(x, y, x + 23, y + 35, self.get_pattern(status))
+
     self.hai_status = status
 
 
@@ -95,12 +108,13 @@ class Cursor:
 
   # カーソル表示 (スプライト)
   #@micropython.viper
-  def scroll(self):
+  def scroll(self, on=True):
     if self.position == 13:
       x = 16 + 4 + 4 * 24 + 13 * 24 + 4
     else:
       x = 16 + 4 + 4 * 24 + self.position * 24
-    Cursor.sprite.set(0, x, 488, (1 << 8) | 0, 3, True)
+    priority = 3 if on else 0
+    Cursor.sprite.set(0, x, 488, (1 << 8) | 0, priority, True)
 
   # カーソル左移動
   #@micropython.viper
@@ -113,7 +127,6 @@ class Cursor:
   def move_right(self):
     self.position = ( self.position + 1 ) % 14
     self.scroll()
-
 
 # SJIS漢字クラス
 class Kanji:
@@ -153,6 +166,9 @@ class Kanji:
 # ゲームクラス
 class Game:
 
+  # 雀マットの色 
+  JANTAKU_COLOR = const(0b01000_00011_00011_1)
+
   # コンストラクタ
   def __init__(self, hai_image_file):
 
@@ -162,10 +178,10 @@ class Game:
     # 積み棒の本数
     self.num_tsumibo:int = 0    
 
-    # 0:COMPUTERが親 1:自分が親
+    # 0:COMが親 1:自分が親
     self.oya:int = 1 #random.randint(0,1)
 
-    # 自分の風 0:東家 1:南家 2:西家 3:北家    
+    # 自分とCOMの風 0:東家 1:南家 2:西家 3:北家   基本的に東か西しかない  
     self.kaze_player:int = 0 if self.oya == 1 else 2
     self.kaze_computer:int = 0 if self.oya == 0 else 2
 
@@ -192,7 +208,7 @@ class Game:
           break
         hai_image.extend(h)
 
-    # パターン登録
+    # 牌パターン登録
     #  起牌(37) 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3)
     #  背面(1)
     #  倒牌(37) 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3)
@@ -201,11 +217,15 @@ class Game:
       patterns.append(bytes(hai_image[ 24 * 36 * 2 * i : 24 * 36 * 2 * ( i + 1 ) ]))
     Hai.patterns = patterns
 
+  # カーソル取得
+  def get_cursor(self):
+    return self.cursor
+
   # 雀卓クリア
   @micropython.viper
   def clear_jantaku(self):
     x68k.dos(x68k.d.CONCTRL,pack('2h',10,2))
-    x68k.iocs(x68k.i.FILL,a1=pack('5h',0,0,511,511,0b01000_00011_00011_1))
+    x68k.iocs(x68k.i.FILL,a1=pack('5h',0,0,511,511,Game.JANTAKU_COLOR))
 
   # 局名をSJISバイト列で返す
   #@micropython.viper
@@ -219,7 +239,7 @@ class Game:
 
   # 局・本場情報表示
   #@micropython.viper
-  def print_kyoku_honba(self, x=32, y=13):
+  def print_kyoku_honba(self, x=14, y=16):
     if self.num_tsumibo > 0:
       s = f"\x1b[{y};{x}H".encode() + self.get_kyoku_sjis_bytes() + b" " + self.get_honba_sjis_bytes()
     else:
@@ -229,8 +249,12 @@ class Game:
   # 風・スコア・親情報表示
   #@micropython.viper
   def print_scores(self):
-    kp = Kanji.sjis_ton + Kanji.sjis_cha if self.kaze_player == 0 else Kanji.sjis_sha + Kanji.sjis_cha
-    kc = Kanji.sjis_ton + Kanji.sjis_cha if self.kaze_computer == 0 else Kanji.sjis_sha + Kanji.sjis_cha
+    if self.kaze_player == 0:
+      kp = Kanji.sjis_ton + Kanji.sjis_cha
+      kc = Kanji.sjis_sha + Kanji.sjis_cha
+    else:      
+      kp = Kanji.sjis_sha + Kanji.sjis_cha
+      kc = Kanji.sjis_ton + Kanji.sjis_cha
     if self.oya == 1:
       kp += b' ' + Kanji.sjis_oya
     else:
@@ -241,7 +265,6 @@ class Game:
 
   # 牌山の初期化
   def setup_yama(self):
-
     # 牌インスタンス作成 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) 
     hais = []
     for i in range(34*4):
@@ -261,45 +284,69 @@ class Game:
     self.yama = hais
 
     # 手牌を空にする
-    self.tehai_player = []
-    self.tehai_computer = []
+    self.tehais_player = []
+    self.tehais_computer = []
 
-  # 山の指定位置から指定牌とった Hai インスタンスのリストを返す n=1 の時はリストではなくインスタンスを返す
+    # 捨牌も空にする
+    self.sutehais_player = []
+    self.sutehais_computer = []
+
+  # 山の指定位置から指定数の牌をとった Hai インスタンスのリストを返す n=1 の時はリストではなくインスタンスを返す
   def pop_hai(self, pos=0, n=1):
+    if len(self.yama) == 0:
+      return None
     if n == 1:
       return self.yama.pop(pos)
-
     hais = []
     for i in range(n):
-      hais.append(self.yama.pop(pos))
-      
+      hais.append(self.yama.pop(pos))      
     return hais
   
   # 手牌をリストとして返す
-  def get_tehai(self, p):
+  def get_tehais(self, p):
     if p == 0:
-      return self.tehai_computer
+      return self.tehais_computer
     else:
-      return self.tehai_player
+      return self.tehais_player
 
   # 手牌を複数牌追加する
   def add_tehais(self, p, hais):
     if p == 0:
-      self.tehai_computer.extend(hais)
+      n = len(self.tehais_computer)
+      self.tehais_computer.extend(hais)
+      for i,h in enumerate(hais):
+        h.put(p, n + i, 2, 3)
     else:
-      self.tehai_player.extend(hais)
+      n = len(self.tehais_player)
+      self.tehais_player.extend(hais)
+      for i,h in enumerate(hais):
+        h.put(p, n + i, 0, 3)
 
   # 手牌を1牌だけ追加する
   def add_tehai(self, p, hai):
     if p == 0:
-      self.tehai_computer.append(hai)
+      self.tehais_computer.append(hai)
+      hai.put(p, len(self.tehais_computer) - 1, 2, 3)
     else:
-      self.tehai_player.append(hai)
+      self.tehais_player.append(hai)
+      hai.put(p, len(self.tehais_player) - 1, 0, 3)
+#    print(f"p={p},len(tehais_com)={len(self.tehais_computer)},len(tehais_1up)={len(self.tehais_player)}")
 
-  # カーソル取得
-  def get_cursor(self):
-    return self.cursor
+  # 捨牌を1牌追加する
+  def add_sutehai(self, p, hai):
+    if p == 0:
+      self.sutehais_computer.append(hai)
+      hai.put(3+p, len(self.sutehais_computer) - 1, 1, 1)
+    else:
+      self.sutehais_player.append(hai)
+      hai.put(3+p, len(self.sutehais_player) - 1, 1, 1)    
 
+  # 理牌
+  def sort_tehais(self, p):
+    if p == 0:
+      list.sort(self.tehais_computer, key=lambda h: h.hai_type)
+    else:
+      list.sort(self.tehais_player, key=lambda h: h.hai_type)
 
 # メイン
 def main():
@@ -344,7 +391,7 @@ def main():
   for i,h in enumerate(wan_hais):
     h.put(2,i//2,2,1)
 
-  # ドラ表示牌をめくる
+  # 後ろから5番目のドラ表示牌をめくる
   time.sleep(0.5)
   wan_hais[4].put(2,2,0,1)
 
@@ -356,55 +403,134 @@ def main():
 
   # 4牌ずつ取っていくのを3回繰り返す
   for j in range(3):
+    # 親が4牌取る
     hais = game.pop_hai(0,4)
-    for i,h in enumerate(hais):
-      h.put(idx_oya,len(game.get_tehai(idx_oya))+i,hai_stat_oya,3)
+#    for i,h in enumerate(hais):
+#      h.put(idx_oya,len(game.get_tehais(idx_oya))+i,hai_stat_oya,3)
     game.add_tehais(idx_oya,hais)
 
+    # 子が4牌取る
     hais = game.pop_hai(0,4)
-    for i,h in enumerate(hais):
-      h.put(idx_ko,len(game.get_tehai(idx_ko))+i,hai_stat_ko,3)
+#    for i,h in enumerate(hais):
+#      h.put(idx_ko,len(game.get_tehais(idx_ko))+i,hai_stat_ko,3)
     game.add_tehais(idx_ko,hais)
 
-  # 親はもう2牌、子はもう1牌とる
+  # 親はもう2牌とる
   hais = game.pop_hai(0,2)
-  for i,h in enumerate(hais):
-    h.put(idx_oya,len(game.get_tehai(idx_oya))+i,hai_stat_oya,3)
+#  for i,h in enumerate(hais):
+#    h.put(idx_oya,len(game.get_tehais(idx_oya))+i,hai_stat_oya,3)
   game.add_tehais(idx_oya,hais)  
 
+  # 子はもう1牌とる
   h = game.pop_hai()
-  h.put(idx_ko,len(game.get_tehai(idx_ko)),hai_stat_ko,3)
+#  h.put(idx_ko,len(game.get_tehais(idx_ko)),hai_stat_ko,3)
   game.add_tehai(idx_ko,h)
 
+#  print(f"\ncom={len(game.get_tehais(0))},1up={len(game.get_tehais(1))}")
+
   # 自分の手牌を一度伏せて
-  for i,h in enumerate(game.get_tehai(1)):
+  for i,h in enumerate(game.get_tehais(1)):
     h.put(1,i,2,3)
 
   # 理牌
-  for i,h in enumerate(sorted(game.get_tehai(1),key=lambda h: h.hai_type)):
+  game.sort_tehais(1)
+  for i,h in enumerate(game.get_tehais(1)):
     h.put(1,i,0,3)
 
-  # ツモ牌
-#  h = game.pop_hai()
-#  h.hai_status = 0
-#  h.put(1,13)
-
-  # カーソル表示
-  cursor.scroll()
-
   # メインループ
-  while True:
+  abort = False
+  while abort is False:
 
-    # check left and right keys 
-    if x68k.iocs(x68k.i.B_KEYSNS):
-      scan_code = ( x68k.iocs(x68k.i.B_KEYINP) >> 8 ) & 0x7f
-      if scan_code == 0x01:       # esc key
-        break
-      elif scan_code == 0x3b:     # left key
-        cursor.move_left()
-      elif scan_code == 0x3d:     # right key
-        cursor.move_right()
+    # check shift key to abort
+    if x68k.iocs(x68k.i.B_SFTSNS) & 0x01:
+      abort = True
+      break
 
+    # 自分が14枚持ってる？
+    tehais = game.get_tehais(1)
+    if len(tehais) == 14:
+
+      # カーソルを表示する
+      cursor.position = 13
+      cursor.scroll()
+
+      # キーボードで移動させスペースキーまたはリターンキーで確定
+      while True:
+        # check left and right keys 
+        if x68k.iocs(x68k.i.B_KEYSNS):
+          scan_code = ( x68k.iocs(x68k.i.B_KEYINP) >> 8 ) & 0x7f
+          if scan_code == 0x01:       # esc key
+            abort = True
+            break
+          elif scan_code == 0x3b:     # left key
+            cursor.move_left()
+          elif scan_code == 0x3d:     # right key
+            cursor.move_right()
+          elif scan_code == 0x35:     # space key
+            break
+          elif scan_code == 0x1d:     # return key
+            break
+
+      # esc key to exit
+      if abort:
+          break
+
+      # カーソルはもう不要なので消す
+      cursor.scroll(False)
+
+      # 捨て牌
+      sutehai_idx = cursor.position       # カーソル位置から取得
+      sutehai = tehais[ sutehai_idx ]     # 捨て牌オブジェクト
+      sutehai.put(1, sutehai_idx, 3, 1)   # 表示を消して
+      game.add_sutehai(1, sutehai)        # 自分の河に捨てる
+      time.sleep(0.5)
+
+      # ツモギリでないならば
+      if sutehai_idx != 13:               
+        tehais[ 13 ].put(1, 13, 3, 1)                     # ツモった牌を消して
+        tehais[ sutehai_idx ] = tehais.pop(-1)            # 捨てた位置をツモった牌で埋める
+        game.sort_tehais(1)                               # 理牌して再表示
+        x68k.vsync()
+        for i,h in enumerate(game.get_tehais(1)):
+          h.put(1,i,0,0)
+      else:
+        tehais[ 13 ].put(1, 13, 3, 1)                     # ツモった牌を消して
+        tehais.pop(-1)                                    # vanish!
+
+      # COMが1枚ツモる
+      tsumo = game.pop_hai()
+      if tsumo is None:
+        abort = True
+        break   # 流局
+      game.add_tehai(0,tsumo)
+      time.sleep(0.5)
+
+    # COM が14枚持ってる?
+    tehais_com = game.get_tehais(0)
+    if len(tehais_com) == 14:
+
+      # ランダムに1枚抜くw
+      sutehai_idx = random.randint(0, 13)
+      sutehai = tehais_com[ sutehai_idx ]
+      sutehai.put(0, sutehai_idx, 3, 1)   # 表示を消して
+      game.add_sutehai(0, sutehai)        # COMの河に捨てる
+
+      # ツモギリでないならば
+      if sutehai_idx != 13:               
+        tehais_com[ 13 ].put(0, 13, 3, 1)                     # ツモった牌を消して
+        tehais_com[ sutehai_idx ] = tehais_com.pop(-1)        # 捨てた位置をツモった牌で埋める
+        tehais_com[ sutehai_idx ].put(0, sutehai_idx, 2, 1)   # 埋めた先で背面表示
+      else:
+        tehais_com[ 13 ].put(0, 13, 3, 1)                     # ツモった牌を消して
+        tehais_com.pop(-1)                                    # vanish!
+
+      # 自分が1枚ツモる
+      tsumo = game.pop_hai()
+      if tsumo is None:
+        abort = True
+        break   # 流局
+      game.add_tehai(1,tsumo)
+      
   # flush key buffer
   x68k.dos(x68k.d.KFLUSH,pack('h',0))  
 
