@@ -7,6 +7,7 @@ from struct import pack
 # バージョン
 VERSION = const("2023.02.27c")
 
+
 # 牌クラス
 class Hai:
 
@@ -23,10 +24,10 @@ class Hai:
     self.hai_status = 2
 
   # パターンデータ参照
-  def get_pattern(self):
-    if self.hai_status == 2:            
+  def get_pattern(self, status):
+    if status == 2:            
       return Hai.patterns [ 7 + 9 * 3 + 3 ]   # 背面
-    elif self.hai_status == 1:          
+    elif status == 1:          
       return Hai.patterns [ 7 + 9 * 3 + 3 + 1 + self.hai_type ]   # 倒牌
     else:
       return Hai.patterns [ self.hai_type ]   # 起牌
@@ -34,9 +35,9 @@ class Hai:
   # パターン描画 (グラフィック)
   #  row ... 0:COMPUTER手牌 1:PLAYER手牌 2:王牌  
   #@micropython.viper
-  def put(self, row:int, pos_x:int):
+  def put(self, row, pos_x, status, vsync=1):
     if row == 0:
-      x = 4 * 24 + pos_x * 24 if pos_x != -1 else 4 * 24 + pos_x * 24 - 4
+      x = 4 * 24 + (12 - pos_x) * 24 if pos_x != 13 else 4 * 24 + (12 - pos_x) * 24 - 4
       y = 1 * 36
     elif row == 1:
       x = 4 * 24 + pos_x * 24 if pos_x != 13 else 4 * 24 + pos_x * 24 + 4
@@ -44,7 +45,11 @@ class Hai:
     elif row == 2:
       x = 9 * 24 + pos_x * 24
       y = 6 * 36
-    Hai.gvram.put(x, y, x + 23, y + 35, self.get_pattern())
+    for i in range(vsync):
+      x68k.vsync()
+    Hai.gvram.put(x, y, x + 23, y + 35, self.get_pattern(status))
+    self.hai_status = status
+
 
 # カーソルクラス
 class Cursor:
@@ -109,8 +114,9 @@ class Cursor:
     self.position = ( self.position + 1 ) % 14
     self.scroll()
 
-# ゲームクラス
-class Game:
+
+# SJIS漢字クラス
+class Kanji:
 
   # '〇' '一' '二' '三' '四' '五' '六' '七' '八' '九'
   sjis_suji = bytes([ 0x81, 0x5a, 0x88, 0xea, 0x83, 0x6a, 0x8e, 0x4f, 0x8e, 0x6c, 
@@ -143,8 +149,12 @@ class Game:
   # '点'
   sjis_ten = bytes([ 0x93, 0x5f ])
 
+
+# ゲームクラス
+class Game:
+
   # コンストラクタ
-  def __init__(self):
+  def __init__(self, hai_image_file):
 
     # 東風戦のみ 0:東一局  1:東ニ局  2:東三局  3:東四局(オーラス)
     self.kyoku:int = 0          
@@ -152,8 +162,8 @@ class Game:
     # 積み棒の本数
     self.num_tsumibo:int = 0    
 
-    # 0:自分が親 1:COMPUTERが親
-    self.oya:int = random.randint(0,1)
+    # 0:COMPUTERが親 1:自分が親
+    self.oya:int = 1 #random.randint(0,1)
 
     # 自分の風 0:東家 1:南家 2:西家 3:北家    
     self.kaze_player:int = 0 if self.oya == 1 else 2
@@ -163,50 +173,19 @@ class Game:
     self.score_player:int = 25000
     self.score_computer:int = 25000
 
-  # 雀卓クリア
-  @micropython.viper
-  def clear_jantaku(self):
-    x68k.dos(x68k.d.CONCTRL,pack('2h',10,2))
-    x68k.iocs(x68k.i.FILL,a1=pack('5h',0,0,511,511,0b01000_00011_00011_1))
+    # 山
+    self.yama = None
 
-  # 局名をSJISバイト列で返す
-  #@micropython.viper
-  def get_kyoku_sjis_bytes(self):
-    return Game.sjis_ton + Game.sjis_suji[ self.kyoku * 2 + 2 : self.kyoku * 2 + 4 ] + Game.sjis_kyoku
+    # カーソル
+    self.cursor = Cursor()
 
-  # 本場をSJISバイト列で返す
-  #@micropython.viper
-  def get_honba_sjis_bytes(self):
-    return Game.sjis_suji[ self.num_tsumibo * 2 : self.num_tsumibo * 2 + 2 ] + Game.sjis_honba
-
-  # 局・本場情報表示
-  #@micropython.viper
-  def print_kyoku_honba(self, x=32, y=13):
-    if self.num_tsumibo > 0:
-      s = f"\x1b[{y};{x}H".encode() + self.get_kyoku_sjis_bytes() + b" " + self.get_honba_sjis_bytes()
-    else:
-      s = f"\x1b[{y};{x}H".encode() + self.get_kyoku_sjis_bytes()
-    x68k.dos(x68k.d.CONCTRL,pack('hl',1,addressof(s)))  
-
-  # 風・スコア・親情報表示
-  #@micropython.viper
-  def print_scores(self):
-    kp = Game.sjis_ton + Game.sjis_cha if self.kaze_player == 0 else Game.sjis_sha + Game.sjis_cha
-    kc = Game.sjis_ton + Game.sjis_cha if self.kaze_computer == 0 else Game.sjis_sha + Game.sjis_cha
-    if self.oya:
-      kp += b' ' + Game.sjis_oya
-    else:
-      kc += b' ' + Game.sjis_oya
-    s = f"\x1b[1;1HCOMPUTER {self.score_computer}".encode() + Game.sjis_ten + b' ' + kc + \
-        f"\x1b[31;1HPLAYER {self.score_player}".encode() + Game.sjis_ten + b' ' + kp 
-    x68k.dos(x68k.d.CONCTRL,pack('hl',1,addressof(s)))
-
-  # 牌セット取得
-  def get_hais(self, hai_file_name):
+    # 手牌
+    self.tehai_player = []
+    self.tehai_computer = []
 
     # 牌画像データ読み込み (起牌 7+3*9+3種 + 背面 1種 + 倒牌 7+3*9+3種)
     hai_image = bytearray()
-    with open(hai_file_name,"rb") as f:
+    with open(hai_image_file,"rb") as f:
       while True:
         h = f.read()
         if len(h) == 0:
@@ -222,6 +201,47 @@ class Game:
       patterns.append(bytes(hai_image[ 24 * 36 * 2 * i : 24 * 36 * 2 * ( i + 1 ) ]))
     Hai.patterns = patterns
 
+  # 雀卓クリア
+  @micropython.viper
+  def clear_jantaku(self):
+    x68k.dos(x68k.d.CONCTRL,pack('2h',10,2))
+    x68k.iocs(x68k.i.FILL,a1=pack('5h',0,0,511,511,0b01000_00011_00011_1))
+
+  # 局名をSJISバイト列で返す
+  #@micropython.viper
+  def get_kyoku_sjis_bytes(self):
+    return Kanji.sjis_ton + Kanji.sjis_suji[ self.kyoku * 2 + 2 : self.kyoku * 2 + 4 ] + Kanji.sjis_kyoku
+
+  # 本場をSJISバイト列で返す
+  #@micropython.viper
+  def get_honba_sjis_bytes(self):
+    return Kanji.sjis_suji[ self.num_tsumibo * 2 : self.num_tsumibo * 2 + 2 ] + Kanji.sjis_honba
+
+  # 局・本場情報表示
+  #@micropython.viper
+  def print_kyoku_honba(self, x=32, y=13):
+    if self.num_tsumibo > 0:
+      s = f"\x1b[{y};{x}H".encode() + self.get_kyoku_sjis_bytes() + b" " + self.get_honba_sjis_bytes()
+    else:
+      s = f"\x1b[{y};{x}H".encode() + self.get_kyoku_sjis_bytes()
+    x68k.dos(x68k.d.CONCTRL,pack('hl',1,addressof(s)))  
+
+  # 風・スコア・親情報表示
+  #@micropython.viper
+  def print_scores(self):
+    kp = Kanji.sjis_ton + Kanji.sjis_cha if self.kaze_player == 0 else Kanji.sjis_sha + Kanji.sjis_cha
+    kc = Kanji.sjis_ton + Kanji.sjis_cha if self.kaze_computer == 0 else Kanji.sjis_sha + Kanji.sjis_cha
+    if self.oya == 1:
+      kp += b' ' + Kanji.sjis_oya
+    else:
+      kc += b' ' + Kanji.sjis_oya
+    s = f"\x1b[1;1HCOMPUTER {self.score_computer}".encode() + Kanji.sjis_ten + b' ' + kc + \
+        f"\x1b[31;1HPLAYER {self.score_player}".encode() + Kanji.sjis_ten + b' ' + kp 
+    x68k.dos(x68k.d.CONCTRL,pack('hl',1,addressof(s)))
+
+  # 牌山の初期化
+  def setup_yama(self):
+
     # 牌インスタンス作成 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) 
     hais = []
     for i in range(34*4):
@@ -229,11 +249,7 @@ class Game:
       h = Hai(i, t)
       hais.append(h)
 
-    return hais
-
-  # 洗牌
-  #@micropython.viper
-  def shuffle_hais(self, hais):
+    # 洗牌
     for i in range(len(hais) * 8):
       a = random.randrange(0,len(hais)-1)
       b = random.randrange(0,len(hais)-1)
@@ -241,9 +257,49 @@ class Game:
       hais[a] = hais[b]
       hais[b] = c
 
+    # 山として登録
+    self.yama = hais
+
+    # 手牌を空にする
+    self.tehai_player = []
+    self.tehai_computer = []
+
+  # 山の指定位置から指定牌とった Hai インスタンスのリストを返す n=1 の時はリストではなくインスタンスを返す
+  def pop_hai(self, pos=0, n=1):
+    if n == 1:
+      return self.yama.pop(pos)
+
+    hais = []
+    for i in range(n):
+      hais.append(self.yama.pop(pos))
+      
+    return hais
+  
+  # 手牌をリストとして返す
+  def get_tehai(self, p):
+    if p == 0:
+      return self.tehai_computer
+    else:
+      return self.tehai_player
+
+  # 手牌を複数牌追加する
+  def add_tehais(self, p, hais):
+    if p == 0:
+      self.tehai_computer.extend(hais)
+    else:
+      self.tehai_player.extend(hais)
+
+  # 手牌を1牌だけ追加する
+  def add_tehai(self, p, hai):
+    if p == 0:
+      self.tehai_computer.append(hai)
+    else:
+      self.tehai_player.append(hai)
+
   # カーソル取得
   def get_cursor(self):
-    return Cursor()
+    return self.cursor
+
 
 # メイン
 def main():
@@ -265,11 +321,8 @@ def main():
   print(f"version {VERSION} by tantan\n")
 
   # ゲームインスタンス作成
-  game = Game()
-
-  # 牌パターンデータ読み込み
   print("Now loading...")
-  hais = game.get_hais("hai.dat")
+  game = Game("hai.dat")
 
   # カーソルインスタンス取得
   cursor = game.get_cursor()
@@ -283,53 +336,63 @@ def main():
   # スコア・親報表示
   game.print_scores()
 
-  # 洗牌
-  game.shuffle_hais(hais)
+  # 山を積む
+  game.setup_yama()
 
-  # 王牌
-  for i,h in enumerate(reversed(hais[-14:])):
-    x68k.vsync()
-    h.hai_status = 2    # 背面
-    h.put(2,i//2)
+  # 王牌を山の最後から14牌取る
+  wan_hais = game.pop_hai(-1,14)
+  for i,h in enumerate(wan_hais):
+    h.put(2,i//2,2,1)
 
-  # ドラ表示牌
+  # ドラ表示牌をめくる
   time.sleep(0.5)
-  x68k.vsync()
-  hais[-5].hai_status = 0
-  hais[-5].put(2,2)
+  wan_hais[4].put(2,2,0,1)
 
-  # 相手の牌ならべる
-  for i,h in enumerate(hais[13:26]):
-    for v in range(3):
-      x68k.vsync()
-    h.hai_status = 2    # 背面
-    h.put(0,i)
+  # 4牌ずつ取っていくのを3回繰り返す
+  for j in range(3):
+    hais = game.pop_hai(0,4)
+    for i,h in enumerate(hais):
+      h.put(0,len(game.get_tehai(0))+i,2,3)
+    game.add_tehais(0,hais)
 
-  # 自分の牌ならべる
-  for i,h in enumerate(hais[0:13]):
-    for v in range(3):
-      x68k.vsync()
-    h.hai_status = 0    # 起牌
-    h.put(1,i)
+    hais = game.pop_hai(0,4)
+    for i,h in enumerate(hais):
+      h.put(1,len(game.get_tehai(1))+i,0,3)
+    game.add_tehais(1,hais)
 
-  # 一度伏せて
-  for i,h in enumerate(hais[0:13]):
-    for v in range(3):
-      x68k.vsync()
-    h.hai_status = 2    # 背面
-    h.put(1,i)
+  # 親はもう2牌、子はもう1牌とる
+  if game.oya == 0:
+    hais = game.pop_hai(0,2)
+    for i,h in enumerate(hais):
+      h.put(0,len(game.get_tehai(0))+i,2,3)
+    game.add_tehais(0,hais)  
+
+    h = game.pop_hai()
+    h.put(1,len(game.get_tehai(1)),0,3)
+    game.add_tehai(1,h)
+
+  else:
+    hais = game.pop_hai(0,2)
+    for i,h in enumerate(hais):
+      h.put(1,len(game.get_tehai(1))+i,0,3)
+    game.add_tehais(1,hais)  
+
+    h = game.pop_hai()
+    h.put(0,len(game.get_tehai(0)),2,3)
+    game.add_tehai(0,h)
+
+  # 自分の手牌を一度伏せて
+  for i,h in enumerate(game.get_tehai(1)):
+    h.put(1,i,2,3)
 
   # 理牌
-  for i,h in enumerate(sorted(hais[0:13],key=lambda h: h.hai_type)):
-    for v in range(3):
-      x68k.vsync()
-    h.hai_status = 0
-    h.put(1,i)
+  for i,h in enumerate(sorted(game.get_tehai(1),key=lambda h: h.hai_type)):
+    h.put(1,i,0,3)
 
   # ツモ牌
-  h = hais[26]
-  h.hai_status = 0
-  h.put(1,13)
+#  h = game.pop_hai()
+#  h.hai_status = 0
+#  h.put(1,13)
 
   # カーソル表示
   cursor.scroll()
