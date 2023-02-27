@@ -5,7 +5,7 @@ from uctypes import addressof
 from struct import pack
 
 # バージョン
-VERSION = const("2023.02.27c")
+VERSION = const("2023.02.27d")
 
 
 # 牌クラス
@@ -348,38 +348,33 @@ def main():
   time.sleep(0.5)
   wan_hais[4].put(2,2,0,1)
 
+  # 親子関係の整理
+  idx_oya = 0 if game.oya == 0 else 1
+  idx_ko  = 1 if game.oya == 0 else 0
+  hai_stat_oya = 0 if game.kaze_player == 0 else 2
+  hai_stat_ko  = 2 if game.kaze_player == 0 else 0
+
   # 4牌ずつ取っていくのを3回繰り返す
   for j in range(3):
     hais = game.pop_hai(0,4)
     for i,h in enumerate(hais):
-      h.put(0,len(game.get_tehai(0))+i,2,3)
-    game.add_tehais(0,hais)
+      h.put(idx_oya,len(game.get_tehai(idx_oya))+i,hai_stat_oya,3)
+    game.add_tehais(idx_oya,hais)
 
     hais = game.pop_hai(0,4)
     for i,h in enumerate(hais):
-      h.put(1,len(game.get_tehai(1))+i,0,3)
-    game.add_tehais(1,hais)
+      h.put(idx_ko,len(game.get_tehai(idx_ko))+i,hai_stat_ko,3)
+    game.add_tehais(idx_ko,hais)
 
   # 親はもう2牌、子はもう1牌とる
-  if game.oya == 0:
-    hais = game.pop_hai(0,2)
-    for i,h in enumerate(hais):
-      h.put(0,len(game.get_tehai(0))+i,2,3)
-    game.add_tehais(0,hais)  
+  hais = game.pop_hai(0,2)
+  for i,h in enumerate(hais):
+    h.put(idx_oya,len(game.get_tehai(idx_oya))+i,hai_stat_oya,3)
+  game.add_tehais(idx_oya,hais)  
 
-    h = game.pop_hai()
-    h.put(1,len(game.get_tehai(1)),0,3)
-    game.add_tehai(1,h)
-
-  else:
-    hais = game.pop_hai(0,2)
-    for i,h in enumerate(hais):
-      h.put(1,len(game.get_tehai(1))+i,0,3)
-    game.add_tehais(1,hais)  
-
-    h = game.pop_hai()
-    h.put(0,len(game.get_tehai(0)),2,3)
-    game.add_tehai(0,h)
+  h = game.pop_hai()
+  h.put(idx_ko,len(game.get_tehai(idx_ko)),hai_stat_ko,3)
+  game.add_tehai(idx_ko,h)
 
   # 自分の手牌を一度伏せて
   for i,h in enumerate(game.get_tehai(1)):
