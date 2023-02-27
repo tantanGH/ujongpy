@@ -71,7 +71,7 @@ class Cursor:
   sprite = x68k.Sprite()
 
   # クラス変数 - パターン定義
-  cursor_pattern = bytes([0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+  CURSOR_PATTERN = bytes([0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
                           0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -92,15 +92,15 @@ class Cursor:
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ])
 
   # クラス変数 - パレット定義
-  cursor_palette = ( 0b11100_11100_10000_0 )
+  CURSOR_PALETTE = ( 0b11100_11100_10000_0 )
 
   def __init__(self):
 
     # スプライト初期化
     Cursor.sprite.init()
     Cursor.sprite.clr()
-    Cursor.sprite.defcg(0, self.cursor_pattern, 1)
-    Cursor.sprite.palet(1, self.cursor_palette, 1)
+    Cursor.sprite.defcg(0, Cursor.CURSOR_PATTERN, 1)
+    Cursor.sprite.palet(1, Cursor.CURSOR_PALETTE, 1)
     Cursor.sprite.disp()
 
     # 位置 0-12 ... 手牌の下  13: ツモ牌の下 
@@ -216,7 +216,6 @@ class Game:
       patterns.append(bytes(hai_image[ 24 * 36 * 2 * i : 24 * 36 * 2 * ( i + 1 ) ]))
 
     Hai.patterns = patterns
-    #print(f"len={len(Hai.patterns)}")
 
   # カーソル取得
   def get_cursor(self):
@@ -331,7 +330,6 @@ class Game:
     else:
       self.tehais_player.append(hai)
       hai.put(p, len(self.tehais_player) - 1, 0, 3)
-#    print(f"p={p},len(tehais_com)={len(self.tehais_computer)},len(tehais_1up)={len(self.tehais_player)}")
 
   # 捨牌を1牌追加する
   def add_sutehai(self, p, hai):
@@ -406,28 +404,19 @@ def main():
   for j in range(3):
     # 親が4牌取る
     hais = game.pop_hai(0,4)
-#    for i,h in enumerate(hais):
-#      h.put(idx_oya,len(game.get_tehais(idx_oya))+i,hai_stat_oya,3)
     game.add_tehais(idx_oya,hais)
 
     # 子が4牌取る
     hais = game.pop_hai(0,4)
-#    for i,h in enumerate(hais):
-#      h.put(idx_ko,len(game.get_tehais(idx_ko))+i,hai_stat_ko,3)
     game.add_tehais(idx_ko,hais)
 
   # 親はもう2牌とる
   hais = game.pop_hai(0,2)
-#  for i,h in enumerate(hais):
-#    h.put(idx_oya,len(game.get_tehais(idx_oya))+i,hai_stat_oya,3)
   game.add_tehais(idx_oya,hais)  
 
   # 子はもう1牌とる
   h = game.pop_hai()
-#  h.put(idx_ko,len(game.get_tehais(idx_ko)),hai_stat_ko,3)
   game.add_tehai(idx_ko,h)
-
-#  print(f"\ncom={len(game.get_tehais(0))},1up={len(game.get_tehais(1))}")
 
   # 自分の手牌を一度伏せて
   for i,h in enumerate(game.get_tehais(1)):
