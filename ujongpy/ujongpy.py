@@ -5,7 +5,7 @@ from uctypes import addressof
 from struct import pack
 
 # バージョン
-VERSION = const("2023.02.27e")
+VERSION = const("2023.02.27f")
 
 
 # 牌クラス
@@ -209,13 +209,14 @@ class Game:
         hai_image.extend(h)
 
     # 牌パターン登録
-    #  起牌(37) 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3)
-    #  背面(1)
+    #  起牌(37) 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3) + 背面(1)
     #  倒牌(37) 字牌(7) + 萬子(9) + 筒子(9) + 索子(9) + 赤5(3)
     patterns = []
     for i in range( 7 + 9 * 3 + 3 + 1 + 7 + 9 * 3 + 3):    
       patterns.append(bytes(hai_image[ 24 * 36 * 2 * i : 24 * 36 * 2 * ( i + 1 ) ]))
+
     Hai.patterns = patterns
+    #print(f"len={len(Hai.patterns)}")
 
   # カーソル取得
   def get_cursor(self):
