@@ -31,7 +31,7 @@ class Hai:
     else:
       return Hai.patterns [ self.hai_type ]   # 起牌
 
-  # パターン描画
+  # パターン描画 (グラフィック)
   #  row ... 0:COMPUTER手牌 1:PLAYER手牌 2:王牌  
   #@micropython.viper
   def put(self, row:int, pos_x:int):
@@ -88,6 +88,7 @@ class Cursor:
     # 位置 0-12 ... 手牌の下  13: ツモ牌の下 
     self.position = 13
 
+  # カーソル表示 (スプライト)
   #@micropython.viper
   def scroll(self):
     if self.position == 13:
@@ -96,11 +97,13 @@ class Cursor:
       x = 16 + 4 + 4 * 24 + self.position * 24
     Cursor.sprite.set(0, x, 488, (1 << 8) | 0, 3, True)
 
+  # カーソル左移動
   #@micropython.viper
   def move_left(self):
     self.position = ( self.position - 1 + 14 ) % 14
     self.scroll()
 
+  # カーソル右移動
   #@micropython.viper
   def move_right(self):
     self.position = ( self.position + 1 ) % 14
@@ -198,7 +201,7 @@ class Game:
         f"\x1b[31;1HPLAYER {self.score_player}".encode() + Game.sjis_ten + b' ' + kp 
     x68k.dos(x68k.d.CONCTRL,pack('hl',1,addressof(s)))
 
-  # 配牌
+  # 牌セット取得
   def get_hais(self, hai_file_name):
 
     # 牌画像データ読み込み (起牌 7+3*9+3種 + 背面 1種 + 倒牌 7+3*9+3種)
@@ -238,7 +241,7 @@ class Game:
       hais[a] = hais[b]
       hais[b] = c
 
-  # カーソル
+  # カーソル取得
   def get_cursor(self):
     return Cursor()
 
