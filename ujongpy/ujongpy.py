@@ -5,7 +5,7 @@ from uctypes import addressof
 from struct import pack
 
 # バージョン
-VERSION = const("2023.02.27f")
+VERSION = const("2023.02.28a")
 
 
 # 牌クラス
@@ -132,35 +132,35 @@ class Cursor:
 class Kanji:
 
   # '〇' '一' '二' '三' '四' '五' '六' '七' '八' '九'
-  sjis_suji = bytes([ 0x81, 0x5a, 0x88, 0xea, 0x83, 0x6a, 0x8e, 0x4f, 0x8e, 0x6c, 
+  SJIS_SUJI = bytes([ 0x81, 0x5a, 0x88, 0xea, 0x83, 0x6a, 0x8e, 0x4f, 0x8e, 0x6c, 
                       0x8c, 0xdc, 0x98, 0x5a, 0x8e, 0xb5, 0x94, 0xaa, 0x8b, 0xe3 ])
 
   # '東'
-  sjis_ton = bytes([ 0x93, 0x8c ])
+  SJIS_TON = bytes([ 0x93, 0x8c ])
 
   # '南'
-  sjis_nan = bytes([ 0x93, 0xec ])
+  SJIS_NAN = bytes([ 0x93, 0xec ])
 
   # '西'
-  sjis_sha = bytes([ 0x90, 0xbc ])
+  SJIS_SHA = bytes([ 0x90, 0xbc ])
 
   # '北'
-  sjis_pei = bytes([ 0x96, 0x6b ])
+  SJIS_PEI = bytes([ 0x96, 0x6b ])
 
   # '家'
-  sjis_cha = bytes([ 0x89, 0xc6 ])
+  SJIS_CHA = bytes([ 0x89, 0xc6 ])
 
   # '親'
-  sjis_oya = bytes([ 0x90, 0x65 ])
+  SJIS_OYA = bytes([ 0x90, 0x65 ])
 
   # '局'
-  sjis_kyoku = bytes([ 0x8b, 0xc7 ])
+  SJIS_KYOKU = bytes([ 0x8b, 0xc7 ])
 
   # '本' '場'
-  sjis_honba = bytes([ 0x96, 0x7b, 0x8f, 0xea ])
+  SJIS_HONBA = bytes([ 0x96, 0x7b, 0x8f, 0xea ])
 
   # '点'
-  sjis_ten = bytes([ 0x93, 0x5f ])
+  SJIS_TEN = bytes([ 0x93, 0x5f ])
 
 
 # ゲームクラス
@@ -179,7 +179,7 @@ class Game:
     self.num_tsumibo:int = 0    
 
     # 0:COMが親 1:自分が親
-    self.oya:int = 1 #random.randint(0,1)
+    self.oya:int = random.randint(0,1)
 
     # 自分とCOMの風 0:東家 1:南家 2:西家 3:北家   基本的に東か西しかない  
     self.kaze_player:int = 0 if self.oya == 1 else 2
@@ -230,12 +230,12 @@ class Game:
   # 局名をSJISバイト列で返す
   #@micropython.viper
   def get_kyoku_sjis_bytes(self):
-    return Kanji.sjis_ton + Kanji.sjis_suji[ self.kyoku * 2 + 2 : self.kyoku * 2 + 4 ] + Kanji.sjis_kyoku
+    return Kanji.SJIS_TON + Kanji.SJIS_SUJI[ self.kyoku * 2 + 2 : self.kyoku * 2 + 4 ] + Kanji.SJIS_KYOKU
 
   # 本場をSJISバイト列で返す
   #@micropython.viper
   def get_honba_sjis_bytes(self):
-    return Kanji.sjis_suji[ self.num_tsumibo * 2 : self.num_tsumibo * 2 + 2 ] + Kanji.sjis_honba
+    return Kanji.SJIS_SUJI[ self.num_tsumibo * 2 : self.num_tsumibo * 2 + 2 ] + Kanji.SJIS_HONBA
 
   # 局・本場情報表示
   #@micropython.viper
@@ -250,17 +250,17 @@ class Game:
   #@micropython.viper
   def print_scores(self):
     if self.kaze_player == 0:
-      kp = Kanji.sjis_ton + Kanji.sjis_cha
-      kc = Kanji.sjis_sha + Kanji.sjis_cha
+      kp = Kanji.SJIS_TON + Kanji.SJIS_CHA
+      kc = Kanji.SJIS_SHA + Kanji.SJIS_CHA
     else:      
-      kp = Kanji.sjis_sha + Kanji.sjis_cha
-      kc = Kanji.sjis_ton + Kanji.sjis_cha
+      kp = Kanji.SJIS_SHA + Kanji.SJIS_CHA
+      kc = Kanji.SJIS_TON + Kanji.SJIS_CHA
     if self.oya == 1:
-      kp += b' ' + Kanji.sjis_oya
+      kp += b' ' + Kanji.SJIS_OYA
     else:
-      kc += b' ' + Kanji.sjis_oya
-    s = f"\x1b[1;1HCOMPUTER {self.score_computer}".encode() + Kanji.sjis_ten + b' ' + kc + \
-        f"\x1b[31;1HPLAYER {self.score_player}".encode() + Kanji.sjis_ten + b' ' + kp 
+      kc += b' ' + Kanji.SJIS_OYA
+    s = f"\x1b[1;1HCOMPUTER {self.score_computer}".encode() + Kanji.SJIS_TEN + b' ' + kc + \
+        f"\x1b[31;1HPLAYER {self.score_player}".encode() + Kanji.SJIS_TEN + b' ' + kp 
     x68k.dos(x68k.d.CONCTRL,pack('hl',1,addressof(s)))
 
   # 牌山の初期化
@@ -370,16 +370,13 @@ def main():
   print("Now loading...")
   game = Game("hai.dat")
 
-  # カーソルインスタンス取得
-  cursor = game.get_cursor()
-
   # 雀卓クリア
   game.clear_jantaku()
 
   # 局・本場情報表示
   game.print_kyoku_honba()
 
-  # スコア・親報表示
+  # スコア・親表示
   game.print_scores()
 
   # 山を積む
@@ -427,6 +424,9 @@ def main():
   for i,h in enumerate(game.get_tehais(1)):
     h.put(1,i,0,3)
 
+  # カーソルインスタンス取得
+  cursor = game.get_cursor()
+
   # メインループ
   abort = False
   while abort is False:
@@ -473,7 +473,7 @@ def main():
       sutehai = tehais[ sutehai_idx ]     # 捨て牌オブジェクト
       sutehai.put(1, sutehai_idx, 3, 1)   # 表示を消して
       game.add_sutehai(1, sutehai)        # 自分の河に捨てる
-      time.sleep(0.5)
+      time.sleep(0.2)
 
       # ツモギリでないならば
       if sutehai_idx != 13:               
@@ -493,7 +493,7 @@ def main():
         abort = True
         break   # 流局
       game.add_tehai(0,tsumo)
-      time.sleep(0.5)
+      time.sleep(0.2)
 
     # COM が14枚持ってる?
     tehais_com = game.get_tehais(0)
